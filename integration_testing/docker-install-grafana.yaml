@@ -1,0 +1,12 @@
+version: "3.8"
+
+services:
+  grafana:
+      image: grafana/grafana-oss:latest
+      container_name: "grafana"
+      ports:
+        - "3000:3000"
+      restart:  unless-stopped
+      user: '1000'
+      environment:
+        - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
