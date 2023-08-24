@@ -7,4 +7,4 @@ To create a new Agent:
 | -- | -- | -- |
 | 1. | `source /path/to/volttron/env/bin/activate` | activate virtual environment |
 | 2. | `cd /path/to/volttron/Agents` | change directory to `Agents` position |
-| 3. | `vpkg init` | create a new Agent |
+| 3. | `vpkg init [directory name] [agent name]` | create a new Agent |
