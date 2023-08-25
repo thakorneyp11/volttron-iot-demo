@@ -1,8 +1,0 @@
-{
-  "device_configs": {
-    "tuya_iaq": ["eb1228790a5548d3edounv"],
-    "tuya_smartplug": ["ebf90c0675a61adaa1susf"]
-  },
-  "endpoint_device_status": "/device/status",
-  "endpoint_device_control": "/device/control"
-}
