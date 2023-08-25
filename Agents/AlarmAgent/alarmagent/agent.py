@@ -6,8 +6,13 @@ __docformat__ = 'reStructuredText'
 
 import logging
 import sys
+import time
+import json
+
 from volttron.platform.agent import utils
 from volttron.platform.vip.agent import Agent, Core, RPC
+
+from .database_handler import insert_data
 
 _log = logging.getLogger(__name__)
 utils.setup_logging()
@@ -32,10 +37,12 @@ def alarmagent(config_path, **kwargs):
     if not config:
         _log.info("Using Agent defaults for starting configuration.")
 
-    setting1 = int(config.get('setting1', 1))
-    setting2 = config.get('setting2', "some/random/topic")
+    device_configs = config.get("device_configs", dict())
+    crate_config = config.get("crate_config", dict())
+    alarm_idle_time = config.get("alarm_idle_time", 60)
+    co2_threshold = config.get("co2_threshold", 1000)
 
-    return Alarmagent(setting1, setting2, **kwargs)
+    return Alarmagent(device_configs, crate_config, alarm_idle_time, co2_threshold, **kwargs)
 
 
 class Alarmagent(Agent):
@@ -43,15 +50,19 @@ class Alarmagent(Agent):
     Document agent constructor here.
     """
 
-    def __init__(self, setting1=1, setting2="some/random/topic", **kwargs):
+    def __init__(self, device_configs=dict(), crate_config=dict(), alarm_idle_time=60, co2_threshold=1000, **kwargs):
         super(Alarmagent, self).__init__(**kwargs)
         _log.debug("vip_identity: " + self.core.identity)
 
-        self.setting1 = setting1
-        self.setting2 = setting2
+        self.device_configs = device_configs
+        self.crate_config = crate_config
+        self.alarm_idle_time = alarm_idle_time
+        self.co2_threshold = co2_threshold
 
-        self.default_config = {"setting1": setting1,
-                               "setting2": setting2}
+        self.default_config = {"device_configs": self.device_configs,
+                               "crate_config": self.crate_config,
+                               "alarm_idle_time": self.alarm_idle_time,
+                               "co2_threshold": self.co2_threshold}
 
         # Set a default configuration to ensure that self.configure is called immediately to setup
         # the agent.
@@ -72,67 +83,89 @@ class Alarmagent(Agent):
         _log.debug("Configuring Agent")
 
         try:
-            setting1 = int(config["setting1"])
-            setting2 = str(config["setting2"])
+            device_configs = config.get("device_configs", dict())
+            crate_config = config.get("crate_config", dict())
+            alarm_idle_time = config.get("alarm_idle_time", 60)
+            co2_threshold = config.get("co2_threshold", 1000)
         except ValueError as e:
             _log.error("ERROR PROCESSING CONFIGURATION: {}".format(e))
             return
 
-        self.setting1 = setting1
-        self.setting2 = setting2
+        self.device_configs = device_configs
+        self.crate_config = crate_config
+        self.alarm_idle_time = alarm_idle_time
+        self.co2_threshold = co2_threshold
+        
+        self.latest_alarm_timestamp = None
+        self.device_topics = list()  # store topics of all devices
 
-        self._create_subscriptions(self.setting2)
+        # construct device topics and template for store latest device information
+        for agent_id, device_ids in self.device_configs.items():
+            _log.debug(f"{self.core.identity}: agent_id-{agent_id}, device_ids-{device_ids}")
+            for device_id in device_ids:
+                self.device_topics.append(f"sensor/{agent_id}/{device_id}/event")
 
-    def _create_subscriptions(self, topic):
+        _log.debug(f"{self.core.identity}: self.device_topics-{self.device_topics}")
+
+        self._create_subscriptions()
+
+    def _create_subscriptions(self):
         """
         Unsubscribe from all pub/sub topics and create a subscription to a topic in the configuration which triggers
         the _handle_publish callback
         """
         self.vip.pubsub.unsubscribe("pubsub", None, None)
 
-        self.vip.pubsub.subscribe(peer='pubsub',
-                                  prefix=topic,
-                                  callback=self._handle_publish)
+        for device_topic in self.device_topics:
+            self.vip.pubsub.subscribe(peer='pubsub',
+                                      prefix=device_topic,
+                                      callback=self._handle_iot_data)
 
-    def _handle_publish(self, peer, sender, bus, topic, headers, message):
+    def _handle_iot_data(self, peer, sender, bus, topic, headers, message):
         """
         Callback triggered by the subscription setup using the topic from the agent's config file
         """
-        pass
+        # recheck message type
+        if isinstance(message, str):
+            message: dict = json.loads(message)
 
-    @Core.receiver("onstart")
-    def onstart(self, sender, **kwargs):
-        """
-        This is method is called once the Agent has successfully connected to the platform.
-        This is a good place to setup subscriptions if they are not dynamic or
-        do any other startup activities that require a connection to the message bus.
-        Called after any configurations methods that are called at startup.
+        # validate topic name
+        if len(topic.split('/')) != 4:
+            return
+        device_id = topic.split('/')[2]
 
-        Usually not needed if using the configuration store.
-        """
-        # Example publish to pubsub
-        self.vip.pubsub.publish('pubsub', "some/random/topic", message="HI!")
+        # perform condition-based checking
+        # check CO2 level more than threshold (1000ppm)
+        co2_value = message.get("co2", None)
+        if co2_value is None:
+            return
+        
+        _log.debug(f"{self.core.identity}: device_id-{device_id}, co2_value-{co2_value}")
 
-        # Example RPC call
-        # self.vip.rpc.call("some_agent", "some_method", arg1, arg2)
-        pass
+        # check alarm idle time
+        if (self.latest_alarm_timestamp is None) or (time.time() - self.latest_alarm_timestamp >= self.alarm_idle_time):
+            # check condition and send alarm event to CrateDB database
+            if co2_value >= self.co2_threshold:
+                # construct data to insert into database
+                _data = [
+                    time.time(),
+                    device_id,
+                    "alarm_co2",
+                    co2_value
+                ]
+                # insert data into database
+                insert_data(
+                    table=self.crate_config.get("table_name", "raw_data"),
+                    data=_data,
+                    HOST=self.crate_config.get("host", "localhost"),
+                    PORT=self.crate_config.get("port", 4200)
+                )
+                _log.debug(f"{self.core.identity}: insert Alarm data into database, data-{_data}")
+                self.latest_alarm_timestamp = time.time()
 
-    @Core.receiver("onstop")
-    def onstop(self, sender, **kwargs):
-        """
-        This method is called when the Agent is about to shutdown, but before it disconnects from
-        the message bus.
-        """
-        pass
-
-    @RPC.export
-    def rpc_method(self, arg1, arg2, kwarg1=None, kwarg2=None):
-        """
-        RPC method
-
-        May be called from another agent via self.core.rpc.call
-        """
-        return self.setting1 + arg1 - arg2
+        # OPTIONAL: PUBLISH alarm event to Volttron's Message Bus
+        # OPTIONAL: PUBLISH control command to IoT devices
+        # OPTIONAL: Send Line Notify message to LINE application
 
 
 def main():
