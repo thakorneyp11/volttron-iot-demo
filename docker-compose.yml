@@ -17,6 +17,8 @@ services:
         condition: on-failure
     environment:
       CRATE_HEAP_SIZE: 2g
+    networks:
+      - internal
 
   grafana:
     image: grafana/grafana-oss:latest
@@ -27,3 +29,9 @@ services:
     user: '1000'
     environment:
       - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+    networks:
+      - internal
+
+networks:
+  internal:
+    name: internal
