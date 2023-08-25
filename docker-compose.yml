@@ -1,0 +1,29 @@
+version: "3.8"
+
+services:
+  cratedb-raw:
+    image: crate:latest
+    container_name: "cratedb-raw"
+    ports:
+      - "4200:4200"
+      - "5432:5432"
+    volumes:
+      - ./cratedb-raw:/data
+    restart: unless-stopped
+    command: [ "crate", "-Cnode.store.allow_mmap=false" ]
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    environment:
+      CRATE_HEAP_SIZE: 2g
+
+  grafana:
+    image: grafana/grafana-oss:latest
+    container_name: "grafana"
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    user: '1000'
+    environment:
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
