@@ -1,4 +1,8 @@
 {
+  "craetdb":{
+    "host": "localhost",
+    "port": 4200
+  },
   "sampling_rate": 5,
   "tuya_credential":{
     "access_id" : "mq3awcw455gy5skwkgxm",

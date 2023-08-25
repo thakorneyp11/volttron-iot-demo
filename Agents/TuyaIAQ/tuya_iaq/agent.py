@@ -10,6 +10,8 @@ import pendulum
 from volttron.platform.agent import utils
 from volttron.platform.vip.agent import Agent, Core, RPC
 from volttron.platform.scheduling import periodic
+import time
+from crate import client
 
 from tuya_connector import (
     TuyaOpenAPI,
@@ -42,9 +44,9 @@ def tuya_iaq(config_path, **kwargs):
     sampling_rate = config.get("sampling_rate", 5)
     tuya_credential = config.get("tuya_credential", {})
     devices = config.get("devices", [])
+    cratedb = config.get("cratedb", {'host': 'localhost', 'port': 4200})
 
-    return TuyaIaq(sampling_rate, tuya_credential, devices, **kwargs)
-
+    return TuyaIaq(sampling_rate, tuya_credential, devices, cratedb, **kwargs)
 
 
 class TuyaIaq(Agent):
@@ -52,17 +54,19 @@ class TuyaIaq(Agent):
     Document agent constructor here.
     """
 
-    def __init__(self, sampling_rate, tuya_credential, devices, **kwargs):
+    def __init__(self, sampling_rate, tuya_credential, devices, cratedb, **kwargs):
         super(TuyaIaq, self).__init__(**kwargs)
         _log.debug("vip_identity: " + self.core.identity)
 
         self.sampling_rate = sampling_rate
         self.tuya_credential = tuya_credential
         self.devices = devices
+        self.cratedb = cratedb
 
         self.default_config = {"sampling_rate": sampling_rate,
                                 "tuya_credential": tuya_credential,
-                                "devices": devices}
+                                "devices": devices,
+                                "cratedb": cratedb}
 
         # Set a default configuration to ensure that self.configure is called immediately to setup
         # the agent.
@@ -86,6 +90,7 @@ class TuyaIaq(Agent):
             sampling_rate = config.get('sampling_rate', 5)
             tuya_credential = config.get('tuya_credential', {})
             devices = config.get('devices', [])
+            cratedb = config.get('cratedb', {'host': 'localhost', 'port': 4200})
 
         except ValueError as e:
             _log.error("ERROR PROCESSING CONFIGURATION: {}".format(e))
@@ -96,26 +101,29 @@ class TuyaIaq(Agent):
         self.sampling_rate = sampling_rate
         self.tuya_credential = tuya_credential
         self.devices = devices
+        self.cratedb = cratedb
 
         self.core.schedule(periodic(self.sampling_rate), self.send_sample_data)
+        
 
     def send_sample_data(self):
         """
         Get data from Tuya API
         """
-
-        # TUYAENVMAP = {"co2": "ch2o_value",
-        #             "temperature": "va_temperature",
-        #             "pm25": "va_humidity",
-        #             "humidity": "pm25_value",
-        #             "noise": "voc_value",
-        #             "alarm_bright": "co2_value"
-        #             }
+        TUYAENVMAP = {"ch2o_value": "co2",
+            "va_temperature": "temperature",
+            "va_humidity": "pm25",
+            "pm25_value": "humidity",
+            "voc_value": "noise",
+            "co2_value": "illuminance"
+            }
 
         access_id = self.tuya_credential['access_id']
         access_key = self.tuya_credential['access_key']
         api_endpoint = self.tuya_credential['api_endpoint']
         devices = self.devices
+        cratedb_host = self.cratedb['host']
+        cratedb_port = self.cratedb['port']
 
         # Enable debug log
         TUYA_LOGGER.setLevel(logging.DEBUG)
@@ -130,29 +138,51 @@ class TuyaIaq(Agent):
             device_id, device_name = next(iter(device_dict.items()))
             response = openapi.get(f"/v1.0/iot-03/devices/{device_id}/status", dict())
             _log.debug(f"IAQ Agent /GET Response: {response}")
+            message = {}
             if response['success']:
-                payload = {item['code']: item['value'] for item in response['result']}
-                message = {
-                    "device_id": device_id,
-                    "device_name": device_name,
-                    "payload": payload
-                }
-
+                for item in response['result']:
+                    if item['code'] in ['ch2o_value', 'va_temperature', 'va_humidity', 'pm25_value', 'voc_value', 'co2_value']:
+                        message[TUYAENVMAP[item['code']]] = item['value']
             else:
-                message = {
-                    "device_id": device_id,
-                    "device_name": device_name,
-                    "payload": {
-                        'ch2o_value': "", 
-                        'alarm_bright': "", 
-                        'va_temperature': "",
-                        'va_humidity': "",
-                        'pm25_value': "",
-                        'voc_value': "",
-                        'co2_value': ""
-                    }
-                }
+                message["co2"] = ""
+                message["temperature"] = ""
+                message["pm25"] = ""
+                message["humidity"] = ""
+                message["noise"] = ""
+                message["illuminance"] = ""
+
+            # Upload data to CrateDB
+        crate_client = client.connect(f"http://{cratedb_host}:{cratedb_port}")
+        cursor = crate_client.cursor()
+
+        for datapoint, value in message.items():        
+            data = [
+                time.time(),
+                device_id,
+                datapoint,
+                value
+            ]
+
+            self.insert_data(cursor, "raw_data", data)
+
         self.publish(device_id, message)
+
+
+    def insert_data(self, crate_cursor: client, table: str, data: list):
+
+        """
+        This function insert data into crateDB with arguments:
+        
+        crate_cursor: cursor pointing from to CrateDB
+        type: crate.client
+        table: name of table to be insert data in CrateDB
+        type: str
+        data: data to insert into database
+        type: list
+        """
+        _log.debug(f"SmartPlug Agent - Inserting data: {data}")
+        insert_data_str = f"""INSERT INTO {table} (timestamp, device_id, datapoint, value) VALUES (?, ?, ?, ?)"""
+        crate_cursor.execute(insert_data_str, data)
 
     def publish(self, device_id:str, message:dict):
         try:
