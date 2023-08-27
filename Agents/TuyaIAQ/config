@@ -4,13 +4,12 @@
     "port": 4200
   },
   "sampling_rate": 5,
-  "tuya_credential":{
-    "access_id" : "mq3awcw455gy5skwkgxm",
-    "access_key" : "0ecaf8cc32ae4151ad1e27ed71d5501a", 
+  "tuya_credential":{  // TODO: replace with your Tuya credential
+    "access_id" : "",
+    "access_key" : "", 
     "api_endpoint" : "https://openapi.tuyaus.com"
   },
   "devices":[
-    {"eb1228790a5548d3edounv": "IAQ-ALTO-MKT-2"} 
+    {"iaq_id_123": "IAQ_Sensor_1"}  // TODO: replace with your Tuya device_id and device_name
   ]
 }
-

@@ -213,9 +213,9 @@ class TuyaIaq(Agent):
         """
         self.vip.pubsub.unsubscribe("pubsub", None, None)
 
-        self.vip.pubsub.subscribe(peer='pubsub',
-                                  prefix=topic,
-                                  callback=self._handle_publish)
+        # self.vip.pubsub.subscribe(peer='pubsub',
+        #                           prefix=topic,
+        #                           callback=self._handle_publish)
 
     def _handle_publish(self, peer, sender, bus, topic, headers, message):
         """

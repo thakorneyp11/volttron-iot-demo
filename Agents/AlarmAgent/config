@@ -1,6 +1,6 @@
 {
   "device_configs": {
-      "tuya_iaq": ["eb1228790a5548d3edounv"]
+      "tuya_iaq": [""]  // TODO: replace with your Tuya device id (format: list of string)
   },
   "crate_config": {
       "host": "localhost",

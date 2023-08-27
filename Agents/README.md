@@ -8,3 +8,9 @@ To create a new Agent:
 | 1. | `source /path/to/volttron/env/bin/activate` | activate virtual environment |
 | 2. | `cd /path/to/volttron/Agents` | change directory to `Agents` position |
 | 3. | `vpkg init [directory name] [agent name]` | create a new Agent |
+
+**Agent list:**
+- Alarm Agent: `vpkg init AlarmAgent alarm_agent`
+- REST Agent: `vpkg init RESTAgent rest_agent`
+- TuyaIAQ Agent: `vpkg init TuyaIAQ tuya_iaq`
+- TuyaSmartPlug Agent: `vpkg init TuyaSmartPlug tuya_smartplug`
