@@ -1,0 +1,3 @@
+[submodule "volttron-docker"]
+	path = volttron-docker
+	url = https://github.com/VOLTTRON/volttron-docker.git

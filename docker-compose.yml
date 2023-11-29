@@ -20,15 +20,32 @@ services:
     networks:
       - internal
 
-  grafana:
-    image: grafana/grafana-oss:latest
-    container_name: "grafana"
+  # grafana:
+  #   image: grafana/grafana-oss:latest
+  #   container_name: "grafana"
+  #   ports:
+  #     - "3000:3000"
+  #   restart: unless-stopped
+  #   user: '1000'
+  #   environment:
+  #     - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+  #   networks:
+  #     - internal
+
+  volttron1:
+    container_name: volttron1
+    hostname: volttron1
+    image: eclipsevolttron/volttron:v3.0
     ports:
-      - "3000:3000"
-    restart: unless-stopped
-    user: '1000'
+      - 8443:8443  # http port for volttron central and binded web address
+    volumes:
+      - ./volttron_setup/platform_config.yml:/platform_config.yml  # platform config for Volttron
+      - ./volttron-docker/configs:/home/volttron/configs  # configs for agents (default directory)
+      - ./volttron1-volume:/home/volttron/db  # volttron db (default directory)
+      - ./:/home/volttron/workspace  # our workspace for developing agents
     environment:
-      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+      - CONFIG=/home/volttron/configs
+      - LOCAL_USER_ID=1000
     networks:
       - internal
 

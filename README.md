@@ -9,6 +9,7 @@ Sample implementation of a **Smart IoT Room** that elevates the capabilities of 
 - Open APIs for Data Retrieval
 - Open APIs for Device Control
 - Monitoring Dashboard
+- Ease Deployment with Docker
 
 
 ## 💻 Images
@@ -28,13 +29,28 @@ Sample implementation of a **Smart IoT Room** that elevates the capabilities of 
 
 ## ⚙️ Setting up
 
-1. Download the repo using `git clone https://github.com/thakorneyp11/volttron-iot-demo.git` in your terminal or directly from github page in zip format.
+```bash
+# clone this repository with submodules
+git clone --recursive https://github.com/thakorneyp11/volttron-iot-demo.git
 
-2. To start Volttron platform:
-```
-source ~/volttron/env/bin/activate
-volttron-ctl shutdown --platform  # if Volttron session already starts
-volttron --bind-web-address http://0.0.0.0:8000 -vv -l ~/volttron/volttron.log&
+# or if you already cloned the repository, here's how to get the submodules
+git submodule update --init --recursive
+
+# change directory to project
+cd volttron-iot-demo
+
+# creates Volttron container with ZMQ message bus
+# along with Grafana and CrateDB containers
+docker-compose up -d
+
+# to ssh into Volttron container
+docker exec -itu volttron volttron1 bash
+
+# setup an Agent: install, configure, enable, and start
+vctl install /home/volttron/workspace/Agents/RESTAgent --tag rest_agent --vip-identity rest_agent
+vctl config store rest_agent /home/volttron/workspace/Agents/RESTAgent/config
+vctl enable --tag rest_agent
+vctl start --tag rest_agent
 ```
 
 
