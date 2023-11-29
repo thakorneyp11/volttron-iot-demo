@@ -1,4 +1,5 @@
-numpy==1.25.2
-opencv-python==4.8.0.76
+crate==0.34.0
+numpy==1.21.6
+opencv-python==4.8.1.78
 pendulum==2.1.2
-requests==2.31.0
+requests==2.23.0

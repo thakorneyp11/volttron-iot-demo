@@ -3,7 +3,8 @@
 
 from crate import client
 
-HOST = "localhost"
+HOST = "cratedb-raw"  # run script in volttron container: docker-compose service name
+# HOST = "localhost"  # run script in local machine
 PORT = 4200
 
 
